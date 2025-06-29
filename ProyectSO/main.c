@@ -23,7 +23,7 @@ pid_t defensa_pid;
 
 ParametrosGlobales parametros;
 
-// Función del proceso drone (hijo)
+// Función del proceso drone (hijosssss)
 void drone_proceso(int id) {
     printf("🛸 Drone %d despegando (PID: %d)\n", id, getpid());
     // Aquí irá la lógica del vuelo, comunicación y ataque en siguientes partes
