@@ -75,7 +75,7 @@ void simular_drone(int id, Coordenada blanco, Parametros p) {
         int yi = (int)y;
 
         // Simular pérdida de comunicación
-        if (!comunicacion_perdida && rand() % 100 < p.prob_perdida_co) {
+        if (!comunicacion_perdida && rand() % 100 < p.prob_perdida_com) {
             comunicacion_perdida = 1;
             printf("⚠️  Drone %d perdió comunicación\n", id);
         }
