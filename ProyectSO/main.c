@@ -14,7 +14,7 @@ typedef struct {
 } Coordenada;
 
 typedef struct {
-    int N;                  // Número de blancos y drones
+    int N;
     int velocidad;
     int distancia_alerta;
     int prob_defensa;
@@ -22,7 +22,7 @@ typedef struct {
     int tiempo_espera;
 } Parametros;
 
-// Función para leer parámetros desde archivo
+// Leer parámetros del archivo
 Parametros leerParametros(const char *filename) {
     Parametros p;
     FILE *f = fopen(filename, "r");
@@ -32,17 +32,17 @@ Parametros leerParametros(const char *filename) {
     }
 
     fscanf(f, "N=%d\n", &p.N);
+    fscanf(f, "B=%*d\n"); // Saltamos B, no lo usamos por ahora
     fscanf(f, "VELOCIDAD=%d\n", &p.velocidad);
     fscanf(f, "Z=%d\n", &p.distancia_alerta);
     fscanf(f, "W=%d\n", &p.prob_defensa);
     fscanf(f, "Q=%d\n", &p.prob_perdida_com);
     fscanf(f, "R=%d\n", &p.tiempo_espera);
-
     fclose(f);
     return p;
 }
 
-// Genera coordenadas aleatorias para blancos entre 100 y 300
+// Generar blancos aleatorios entre 100 y 300
 void generar_blancos(Coordenada blancos[], int n) {
     for (int i = 0; i < n; i++) {
         blancos[i].x = MIN_COORD + rand() % (MAX_COORD - MIN_COORD + 1);
@@ -50,21 +50,56 @@ void generar_blancos(Coordenada blancos[], int n) {
     }
 }
 
-// Simulación individual de un drone
-void simular_drone(int id, Coordenada blanco) {
-    Coordenada posicion = {0, 0}; // Todos inician en (0, 0)
+// Simular movimiento paso a paso y comunicación
+void simular_drone(int id, Coordenada blanco, Parametros p) {
+    float x = 0, y = 0;
+    int comunicacion_perdida = 0;
+    int tiempo_sin_com = 0;
 
-    printf("🚁 Drone %d despegando desde (0, 0) hacia blanco en (%d, %d)\n",
-           id, blanco.x, blanco.y);
+    int dx = blanco.x;
+    int dy = blanco.y;
+    int distancia = abs(dx) + abs(dy); // Evitamos sqrt()
+    int pasos = distancia / p.velocidad;
+    if (pasos < 1) pasos = 1;
 
-    sleep(1); // Aquí podría simularse movimiento
+    float paso_x = (float)dx / pasos;
+    float paso_y = (float)dy / pasos;
 
-    printf("✅ Drone %d alcanzó el blanco en (%d, %d)\n", id, blanco.x, blanco.y);
-    exit(0);
+    printf("🚁 Drone %d despegando hacia blanco (%d, %d)\n", id, blanco.x, blanco.y);
+
+    for (int i = 0; i < pasos; i++) {
+        x += paso_x;
+        y += paso_y;
+
+        int xi = (int)x;
+        int yi = (int)y;
+
+        // Simular pérdida de comunicación
+        if (!comunicacion_perdida && rand() % 100 < p.prob_perdida_com) {
+            comunicacion_perdida = 1;
+            printf("⚠️  Drone %d perdió comunicación\n", id);
+        }
+
+        if (comunicacion_perdida) {
+            tiempo_sin_com++;
+            if (tiempo_sin_com >= p.tiempo_espera) {
+                comunicacion_perdida = 0;
+                tiempo_sin_com = 0;
+                printf("🔁 Drone %d recuperó comunicación\n", id);
+            }
+        } else {
+            printf("📡 Drone %d en (%d, %d)\n", id, xi, yi);
+        }
+
+        sleep(1); // Simula tiempo entre movimientos
+    }
+
+    printf("✅ Drone %d alcanzó su blanco en (%d, %d)\n", id, blanco.x, blanco.y);
+    exit(0); // Fin del proceso drone
 }
 
 int main() {
-    srand(time(NULL)); // Aleatoriedad
+    srand(time(NULL));
 
     Parametros p = leerParametros("parametros.txt");
 
@@ -77,17 +112,16 @@ int main() {
     pid_t pids[MAX_DRONES];
 
     generar_blancos(blancos, p.N);
-
     printf("🗺️  Campo de batalla generado con %d drones/blancos\n", p.N);
 
     for (int i = 0; i < p.N; i++) {
         pids[i] = fork();
         if (pids[i] == 0) {
-            simular_drone(i, blancos[i]);
+            simular_drone(i, blancos[i], p);
         }
     }
 
-    // Espera a que todos los drones terminen
+    // Esperar a que todos los drones terminen
     for (int i = 0; i < p.N; i++) {
         waitpid(pids[i], NULL, 0);
     }
