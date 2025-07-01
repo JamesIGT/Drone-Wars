@@ -1,77 +1,97 @@
-// simulador_drones.c
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <signal.h>
+#include <time.h>
 
 #define MAX_DRONES 100
+#define MIN_COORD 100
+#define MAX_COORD 300
 
 typedef struct {
-    int N; // número de drones
-    int X; // número de blancos
-    int Y; // velocidad m/s
-    int Z; // distancia a partir de la cual actúan defensas
-    int W; // % de probabilidad de ser derribado
-    int Q; // % de probabilidad de perder comunicación
-    int R; // segundos para reintentos
-} ParametrosGlobales;
+    int x;
+    int y;
+} Coordenada;
 
-pid_t drones[MAX_DRONES];
-pid_t defensa_pid;
+typedef struct {
+    int N;                  // Número de blancos y drones
+    int velocidad;
+    int distancia_alerta;
+    int prob_defensa;
+    int prob_perdida_com;
+    int tiempo_espera;
+} Parametros;
 
-ParametrosGlobales parametros;
+// Función para leer parámetros desde archivo
+Parametros leerParametros(const char *filename) {
+    Parametros p;
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        perror("No se pudo abrir el archivo de parámetros");
+        exit(EXIT_FAILURE);
+    }
 
-// Función del proceso drone (hijosssss)
-void drone_proceso(int id) {
-    printf("🛸 Drone %d despegando (PID: %d)\n", id, getpid());
-    // Aquí irá la lógica del vuelo, comunicación y ataque en siguientes partes
-    pause(); // Pausa hasta recibir señales o ser terminado
+    fscanf(f, "N=%d\n", &p.N);
+    fscanf(f, "VELOCIDAD=%d\n", &p.velocidad);
+    fscanf(f, "Z=%d\n", &p.distancia_alerta);
+    fscanf(f, "W=%d\n", &p.prob_defensa);
+    fscanf(f, "Q=%d\n", &p.prob_perdida_com);
+    fscanf(f, "R=%d\n", &p.tiempo_espera);
+
+    fclose(f);
+    return p;
 }
 
-// Función del proceso defensa anti-drone
-void defensa_proceso() {
-    printf("🛡️ Defensa anti-drone activada (PID: %d)\n", getpid());
-    // Lógica de monitoreo y derribo irá aquí
-    pause();
+// Genera coordenadas aleatorias para blancos entre 100 y 300
+void generar_blancos(Coordenada blancos[], int n) {
+    for (int i = 0; i < n; i++) {
+        blancos[i].x = MIN_COORD + rand() % (MAX_COORD - MIN_COORD + 1);
+        blancos[i].y = MIN_COORD + rand() % (MAX_COORD - MIN_COORD + 1);
+    }
+}
+
+// Simulación individual de un drone
+void simular_drone(int id, Coordenada blanco) {
+    Coordenada posicion = {0, 0}; // Todos inician en (0, 0)
+
+    printf("🚁 Drone %d despegando desde (0, 0) hacia blanco en (%d, %d)\n",
+           id, blanco.x, blanco.y);
+
+    sleep(1); // Aquí podría simularse movimiento
+
+    printf("✅ Drone %d alcanzó el blanco en (%d, %d)\n", id, blanco.x, blanco.y);
+    exit(0);
 }
 
 int main() {
-    // Leer parámetros desde consola
-    printf("Ingrese número de drones (N): "); scanf("%d", &parametros.N);
-    printf("Ingrese número de blancos (X): "); scanf("%d", &parametros.X);
-    printf("Ingrese velocidad de drones (Y m/s): "); scanf("%d", &parametros.Y);
-    printf("Ingrese distancia de activación de defensas (Z): "); scanf("%d", &parametros.Z);
-    printf("Ingrese %% de probabilidad de ser derribado (W): "); scanf("%d", &parametros.W);
-    printf("Ingrese %% de pérdida de comunicación (Q): "); scanf("%d", &parametros.Q);
-    printf("Ingrese tiempo máximo de reintento (R seg): "); scanf("%d", &parametros.R);
+    srand(time(NULL)); // Aleatoriedad
 
-    // Crear drones
-    for (int i = 0; i < parametros.N; i++) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            // Proceso hijo
-            drone_proceso(i);
-            exit(0);
-        } else {
-            drones[i] = pid;
+    Parametros p = leerParametros("parametros.txt");
+
+    if (p.N > MAX_DRONES) {
+        fprintf(stderr, "Número máximo de drones (%d) excedido\n", MAX_DRONES);
+        exit(EXIT_FAILURE);
+    }
+
+    Coordenada blancos[MAX_DRONES];
+    pid_t pids[MAX_DRONES];
+
+    generar_blancos(blancos, p.N);
+
+    printf("🗺️  Campo de batalla generado con %d drones/blancos\n", p.N);
+
+    for (int i = 0; i < p.N; i++) {
+        pids[i] = fork();
+        if (pids[i] == 0) {
+            simular_drone(i, blancos[i]);
         }
     }
 
-    // Crear proceso de defensa
-    defensa_pid = fork();
-    if (defensa_pid == 0) {
-        defensa_proceso();
-        exit(0);
+    // Espera a que todos los drones terminen
+    for (int i = 0; i < p.N; i++) {
+        waitpid(pids[i], NULL, 0);
     }
 
-    // Proceso padre espera
-    for (int i = 0; i < parametros.N; i++) {
-        waitpid(drones[i], NULL, 0);
-    }
-    waitpid(defensa_pid, NULL, 0);
-
-    printf("🎯 Simulación finalizada\n");
+    printf("🎯 Simulación completada\n");
     return 0;
 }
