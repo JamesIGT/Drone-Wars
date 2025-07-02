@@ -11,11 +11,13 @@
 #define MIN_COORD 100
 #define MAX_COORD 300
 
+// Estructura para almacenar coordenadas
 typedef struct {
     int x;
     int y;
 } Coordenada;
 
+// Estructura para guardar los parámetros del archivo
 typedef struct {
     int N;
     int velocidad;
@@ -25,6 +27,7 @@ typedef struct {
     int tiempo_espera;
 } Parametros;
 
+// Función para leer los parámetros desde un archivo
 Parametros leerParametros(const char *filename) {
     Parametros p;
     FILE *f = fopen(filename, "r");
@@ -44,6 +47,7 @@ Parametros leerParametros(const char *filename) {
     return p;
 }
 
+// Función que genera coordenadas aleatorias para los blancos
 void generar_blancos(Coordenada blancos[], int n) {
     for (int i = 0; i < n; i++) {
         blancos[i].x = MIN_COORD + rand() % (MAX_COORD - MIN_COORD + 1);
@@ -51,7 +55,9 @@ void generar_blancos(Coordenada blancos[], int n) {
     }
 }
 
+// Función que simula el comportamiento de una defensa antidron
 void simular_defensa(int id, Coordenada blanco, Parametros p) {
+    // Abrir FIFO de posición del dron
     char fifo_pos[64];
     snprintf(fifo_pos, sizeof(fifo_pos), "fifo_pos_drone_%d", id);
 
@@ -70,11 +76,13 @@ void simular_defensa(int id, Coordenada blanco, Parametros p) {
         int dy = pos[1] - blanco.y;
         int dist2 = dx*dx + dy*dy;
 
+        // Verifica si el dron está dentro del radio de defensa
         if (dist2 <= p.distancia_alerta * p.distancia_alerta) {
             if (rand() % 100 < p.prob_defensa) {
+                // El dron fue derribado por la defensa
                 printf("\U0001F6E1\uFE0F  Defensa %d derribó al drone en (%d, %d)\n", id, pos[0], pos[1]);
 
-                // Enviar mensaje de destrucción
+                // Enviar mensaje al centro de comando
                 char fifo_estado[64];
                 snprintf(fifo_estado, sizeof(fifo_estado), "fifo_drone_%d", id);
                 int fd2 = open(fifo_estado, O_WRONLY);
@@ -93,7 +101,9 @@ void simular_defensa(int id, Coordenada blanco, Parametros p) {
     exit(0);
 }
 
+// Función que simula el comportamiento del dron
 void simular_drone(int id, Coordenada blanco, Parametros p) {
+    // Inicializar posición del dron
     float x = 0, y = 0;
     int dx = blanco.x;
     int dy = blanco.y;
@@ -117,11 +127,13 @@ void simular_drone(int id, Coordenada blanco, Parametros p) {
         int xi = (int)x;
         int yi = (int)y;
 
+        // Enviar posición al FIFO de defensa
         if (pos_fd != -1) {
             int pos[2] = {xi, yi};
             write(pos_fd, pos, sizeof(pos));
         }
 
+        // Verificar pérdida de comunicación
         if (rand() % 100 < p.prob_perdida_com) {
             printf("\u26A0\uFE0F  Drone %d ha perdido comunicación\n", id);
             int intentos = 3;
@@ -134,6 +146,7 @@ void simular_drone(int id, Coordenada blanco, Parametros p) {
 
             int respuesta = rand() % 2;
             if (respuesta == 1) {
+                // Falla catastrófica, el dron se autodestruye
                 printf("\U0001F4A5 Drone %d respondió: FALLA CATASTRÓFICA. Autodestrucción.\n", id);
 
                 char fifo_nombre[64];
@@ -152,12 +165,14 @@ void simular_drone(int id, Coordenada blanco, Parametros p) {
             }
         }
 
+        // Mostrar posición actual
         printf("\U0001F4E1 Drone %d en (%d, %d)\n", id, xi, yi);
         sleep(1);
     }
 
     if (pos_fd != -1) close(pos_fd);
 
+    // Reportar misión completada
     char fifo_nombre[64];
     snprintf(fifo_nombre, sizeof(fifo_nombre), "fifo_drone_%d", id);
     int fifo_fd = open(fifo_nombre, O_WRONLY);
@@ -175,8 +190,10 @@ void simular_drone(int id, Coordenada blanco, Parametros p) {
 int main() {
     srand(time(NULL));
 
+    // Leer parámetros desde archivo
     Parametros p = leerParametros("parametros.txt");
 
+    // Validar límite de drones
     if (p.N > MAX_DRONES) {
         fprintf(stderr, "Número máximo de drones (%d) excedido\n", MAX_DRONES);
         exit(EXIT_FAILURE);
@@ -188,6 +205,7 @@ int main() {
 
     printf("\U0001F5FA\uFE0F  Campo de batalla generado con %d drones/blancos\n", p.N);
 
+    // Crear FIFOs para cada dron
     for (int i = 0; i < p.N; i++) {
         char fifo_estado[64];
         snprintf(fifo_estado, sizeof(fifo_estado), "fifo_drone_%d", i);
@@ -198,6 +216,7 @@ int main() {
         mkfifo(fifo_pos, 0666);
     }
 
+    // Lanzar procesos de drones y defensas
     for (int i = 0; i < p.N; i++) {
         if (fork() == 0) {
             simular_drone(i, blancos[i], p);
@@ -207,22 +226,31 @@ int main() {
         }
     }
 
+    // Leer resultados de cada dron
     for (int i = 0; i < p.N; i++) {
         char fifo_nombre[64];
         snprintf(fifo_nombre, sizeof(fifo_nombre), "fifo_drone_%d", i);
         int fd = open(fifo_nombre, O_RDONLY);
         if (fd != -1) {
             char buffer[128];
-            read(fd, buffer, sizeof(buffer));
-            printf("\U0001F4E9 C2 recibió: %s\n", buffer);
+            int bytes = read(fd, buffer, sizeof(buffer));
+            if (bytes > 0) {
+                printf("\U0001F4E9 C2 recibió: %s\n", buffer);
+            } else {
+                printf("\u26A0\uFE0F  C2 no recibió mensaje del Drone %d\n", i);
+            }
             close(fd);
-            unlink(fifo_nombre);
+        } else {
+            printf("\u26A0\uFE0F  C2 no pudo abrir FIFO del Drone %d\n", i);
         }
+        unlink(fifo_nombre);
+
         char fifo_pos[64];
         snprintf(fifo_pos, sizeof(fifo_pos), "fifo_pos_drone_%d", i);
         unlink(fifo_pos);
     }
 
+    // Esperar que terminen todos los procesos
     for (int i = 0; i < 2 * p.N; i++) {
         wait(NULL);
     }
