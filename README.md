@@ -81,7 +81,7 @@ Se utilizan FIFOs (named pipes) para IPC:
 
     fifo_estado: FIFO compartido para notificaciones globales (opcional).
 
-♻️ Persistencia
+## ♻️ Persistencia
 
 Si el centro de comando (main) termina abruptamente:
 
@@ -93,7 +93,7 @@ Si el centro de comando (main) termina abruptamente:
 
     Retoma el monitoreo de drones ya en vuelo.
 
-📋 Ejemplo de Salida
+## 📋 Ejemplo de Salida
 
 🛰️ Drone 1 despegando hacia blanco (203, 149)
 📡 Drone 1 en (100, 100)
@@ -102,13 +102,13 @@ Si el centro de comando (main) termina abruptamente:
 💥 Drone 1: fue derribado por defensa en (120, 120)
 📩 C2 recibió: Drone 1: DERRIBADO POR DEFENSA
 
-🧹 Limpieza
+# 🧹 Limpieza
 
 Para limpiar los FIFOs después de ejecutar el programa:
 
 rm fifo_drone_* fifo_pos_drone_* fifo_estado
 
-📦 Requisitos
+# 📦 Requisitos
 
     Sistema Linux/Unix
 
